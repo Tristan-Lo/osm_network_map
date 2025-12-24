@@ -64,14 +64,17 @@
 
   <script>    
     const HWY_COLORS = {
-        cycleway:       "#2ca02c",
-        footway:        "#1f77b4",
-        path:           "#1f77b4",
-        pedestrian:     "#1f77b4",
-        steps:          "#ff7f0e",
-        living_street:  "#9467bd"
+    cycleway:       "#2ca02c",  // green for cycling
+    footway:        "#1f77b4",  // blue for footways
+    path:           "#17becf",  // teal for shared paths
+    pedestrian:     "#9467bd",  // purple for pedestrian streets
+    steps:          "#ff7f0e",  // orange for steps/stairs
+    living_street:  "#8c564b",  // brown for living streets
+    residential:    "#7f7f7f",  // gray for residential roads with foot access
+    service:        "#bcbd22",  // olive for service roads with foot/cycle access
+    tertiary:       "#d62728"   // red for tertiary roads with access
     };
-    const DEFAULT_COLOR = "#6e6e6e";
+    const DEFAULT_COLOR = "#6e6e6e"; // fallback for anything else
     const COUNTRY_CENTROIDS = {
         // format: [lat, lon]
         hong_kong:  [22.3193, 114.1694],
@@ -119,7 +122,7 @@
     const entries = [];
 
     // keep a readable order
-    const ORDER = ['cycleway', 'footway', 'path', 'pedestrian', 'steps', 'living_street'];
+    const ORDER = ['cycleway', 'footway', 'path', 'pedestrian', 'steps', 'living_street', 'residential', 'service', 'tertiary'];
 
     for (const key of ORDER) {
         if (stats[key] > 0) {
@@ -165,12 +168,12 @@
       // See Overpass QL and formats docs for details. [5](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL)[2](https://dev.overpass-api.de/overpass-doc/en/targets/formats.html)
       return `
         [out:json];
-        way["highway"~"footway|path|pedestrian|steps|cycleway|living_street"](${bbox} );
+        way["highway"~"via_ferrata|corridor|bridleway|footway|path|pedestrian|residential|steps|cycleway|living_street"](${bbox} );
         (._;>;); 
         out body geom;
       `;
     }
-
+ 
     // Fetch Overpass and convert to GeoJSON
     async function fetchGeoJSONForBbox(bbox) {
       setStatus('Querying Overpass…', true);
@@ -224,7 +227,10 @@
         path: 0,
         pedestrian: 0,
         steps: 0,
-        living_street: 0
+        living_street: 0,
+        residential: 0,
+        service: 0,
+        tertiary: 0
     };
 
     if (geojson?.features) {
@@ -262,7 +268,8 @@
         updateLegend(geojson);
         // Optional: fit to layer (commented out since we use current view bbox)
         // map.fitBounds(networkLayer.getBounds(), { maxZoom: map.getZoom() });
-        setStatus(`Loaded ${countLineFeatures(geojson)} features`);
+        // setStatus(`Loaded ${countLineFeatures(geojson)} features`);
+        setStatus(`PeLoaded ${countLineFeatures(geojson)} features`);
       } catch (err) {
         console.error(err);
         setStatus(`Error: ${err.message}`);
