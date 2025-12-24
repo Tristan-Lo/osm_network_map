@@ -1,0 +1,323 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Pedestrian Network (OSM + Leaflet)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="https://tristan-lo.github.io/survey_app/arup_logo.ico">
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    ></script>
+  <script src="https://unpkg.com/osmtogeojson@3.0.0-beta.4/osmtogeojson.js"></script>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: calc(100% - 70px); }
+    #toolbar {
+      display: flex; gap: 12px; align-items: center;
+      padding: 8px 12px; font-family: system-ui, Arial, sans-serif;
+      background: #f7f7f7; border-bottom: 1px solid #ddd;
+    }
+    #status { font-size: 13px; color: #555; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid #999; border-top-color: transparent;
+      border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;
+      margin-right: 6px; vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .legend {
+      background: white; padding: 6px 10px; border: 1px solid #ccc; font-size: 12px;
+      line-height: 1.4;
+    }
+    .legend .box { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; }
+  </style>
+</head>
+
+<body>
+    <div id="toolbar">
+    <button id="refreshBtn">Refresh bbox</button>
+    <label style="margin-left:8px;">
+        <input id="autoRefresh" type="checkbox" checked>
+        Auto refresh on pan/zoom
+    </label>
+    <span id="status" style="margin-left:12px;"></span>
+
+    <!-- Country selector -->
+    <fieldset id="countrySelector" style="border:1px solid #ddd; padding:6px 10px; margin-left:auto;">
+        <legend style="font-size:12px; color:#555; padding:0 6px;">Center on country</legend>
+        <label><input type="radio" name="country" value="hong_kong" checked> Hong Kong</label>
+        <label><input type="radio" name="country" value="singapore"> Singapore</label>
+        <label><input type="radio" name="country" value="philippines"> Philippines</label>
+        <label><input type="radio" name="country" value="malaysia"> Malaysia</label>
+        <label><input type="radio" name="country" value="indonesia"> Indonesia</label>
+        <label><input type="radio" name="country" value="vietnam"> Vietnam</label>
+        <label><input type="radio" name="country" value="thailand"> Thailand</label>
+    </fieldset>
+    </div>
+  <div id="map"></div>
+
+  <script>    
+    const HWY_COLORS = {
+        cycleway:       "#2ca02c",
+        footway:        "#1f77b4",
+        path:           "#1f77b4",
+        pedestrian:     "#1f77b4",
+        steps:          "#ff7f0e",
+        living_street:  "#9467bd"
+    };
+    const DEFAULT_COLOR = "#6e6e6e";
+    const COUNTRY_CENTROIDS = {
+        // format: [lat, lon]
+        hong_kong:  [22.3193, 114.1694],
+        singapore:  [1.285127265868675, 103.81469701020102],
+        philippines:[14.599093243181796, 120.9826595701046],
+        malaysia:   [3.1509487650199905, 101.69294219772647],
+        indonesia:  [-6.198010413877314, 106.84392065720435],
+        vietnam:    [10.82360310141482, 106.62841793792869],
+        thailand:   [13.759319101482278, 100.49943847926299]
+    };
+
+    // Map options
+    const map = L.map('map', {
+        zoomSnap: 0,               // allow fractional zooms (no snapping to integers/quarters)
+        zoomDelta: 0.25,           // each zoom step changes zoom by 0.25
+        wheelPxPerZoomLevel: 400,  // slower/finer mouse-wheel zoom
+        // (optional) other common options:
+        minZoom: 14,
+        // preferCanvas: true,     // use Canvas renderer if you expect many features
+        // zoomControl: true,
+        // attributionControl: true
+    }).setView([22.33, 114.17], 16);
+
+
+    map.options.minZoom = 15;
+    // https://tile.openstreetmap.org/{z}/{x}/{y}.png
+    // https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/WGS84/{z}/{x}/{y}.png
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Legend control
+    const legend = L.control({position: 'bottomleft'});
+    legend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = '<b>Ped Types</b><br>';
+      return div;
+    };
+
+    
+    // Helper to render the legend HTML
+    function renderLegendHTML(stats) {
+    // stats: { cycleway: count, footway: count, ... }
+    const entries = [];
+
+    // keep a readable order
+    const ORDER = ['cycleway', 'footway', 'path', 'pedestrian', 'steps', 'living_street'];
+
+    for (const key of ORDER) {
+        if (stats[key] > 0) {
+        const color = HWY_COLORS[key] ?? DEFAULT_COLOR;
+        const label = key.replace('_', ' '); // nicer label for 'living_street'
+        entries.push(
+            `<div><span class="box" style="background:${color}"></span>${label} <span style="color:#777">(${stats[key]})</span></div>`
+        );
+        }
+    }
+
+    // If none present (e.g., empty bbox), show a note
+    if (entries.length === 0) {
+        entries.push('<div style="color:#777">No matching features</div>');
+    }
+
+    return `<div><b>Ped Types</b></div>${entries.join('')}`;
+    }
+
+    legend.addTo(map);
+
+    // Layer reference
+    let networkLayer = L.geoJSON(null).addTo(map);
+
+    // Status helpersf
+    const statusEl = document.getElementById('status');
+    function setStatus(text, spinning=false) {
+      statusEl.innerHTML = spinning ? `<span class="spinner"></span>${text}` : text;
+    }
+
+    // Build bbox string in Overpass order: south,west,north,east (decimal degrees)
+    function bboxString(bounds) {
+      const s = bounds.getSouth();
+      const w = bounds.getWest();
+      const n = bounds.getNorth();
+      const e = bounds.getEast();
+      return `${s},${w},${n},${e}`;
+    }
+
+    // Compose Overpass QL (ped/cycle within bbox)
+    function buildOverpassQuery(bbox) {
+      // Using out:json and out body geom to include coordinates for ways/relations
+      // See Overpass QL and formats docs for details. [5](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL)[2](https://dev.overpass-api.de/overpass-doc/en/targets/formats.html)
+      return `
+        [out:json];
+        way["highway"~"footway|path|pedestrian|steps|cycleway|living_street"](${bbox} );
+        (._;>;); 
+        out body geom;
+      `;
+    }
+
+    // Fetch Overpass and convert to GeoJSON
+    async function fetchGeoJSONForBbox(bbox) {
+      setStatus('Querying Overpass…', true);
+      const resp = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: buildOverpassQuery(bbox)
+      });
+      if (!resp.ok) {
+        throw new Error(`Overpass HTTP ${resp.status}`);
+      }
+      const overpassJSON = await resp.json();  // Overpass API returns JSON here
+      // Convert Overpass JSON → GeoJSON; same library used by Overpass Turbo. [3](https://wiki.openstreetmap.org/wiki/Overpass_turbo/GeoJSON)
+      const geojson = osmtogeojson(overpassJSON);
+      return geojson;
+    }
+
+    // Style functions
+    function lineStyle(feature) {
+        const hwy = feature?.properties?.highway;
+        const color = HWY_COLORS[hwy] ?? DEFAULT_COLOR;
+        const isSteps = hwy === "steps";
+        return {
+            color,
+            weight: 3,
+            opacity: 0.9,
+            dashArray: isSteps ? "4,3" : null
+        };
+    }
+    
+    // Hide points by making radius/opacity 0
+    function pointToLayer(feature, latlng) {
+    return L.circleMarker(latlng, {
+        radius: 0,          // invisible
+        opacity: 0,
+        fillOpacity: 0
+    });
+    }
+
+    function onEachFeature(feature, layer) {
+      const p = feature.properties || {};
+      const name = p.name || '(no name)';
+      const type = p.highway || '';
+      layer.bindTooltip(`<b>${name}</b><br>type: ${type}`);
+    }
+
+    function updateLegend(geojson) {
+    // Count features per highway type present in the current data
+    const stats = {
+        cycleway: 0,
+        footway: 0,
+        path: 0,
+        pedestrian: 0,
+        steps: 0,
+        living_street: 0
+    };
+
+    if (geojson?.features) {
+        for (const f of geojson.features) {
+        // Only lines matter for legend; skip points/polygons
+        const gtype = f.geometry?.type;
+        if (gtype !== 'LineString' && gtype !== 'MultiLineString') continue;
+
+        const key = f.properties?.highway;
+        if (key && key in stats) {
+            stats[key] += 1;
+        }
+        }
+    }
+
+    // Update the legend DOM
+    const container = legend.getContainer();
+    if (container) {
+        container.innerHTML = renderLegendHTML(stats);
+    }
+    }
+
+    // Load and render for current map view
+    async function loadCurrentBbox() {
+      try {
+        const bbox = bboxString(map.getBounds());
+        const geojson = await fetchGeoJSONForBbox(bbox);
+        // Clear previous layer and add new one
+        networkLayer.clearLayers();        
+        networkLayer = L.geoJSON(geojson, {
+        style: lineStyle,
+        onEachFeature,
+        pointToLayer  // <- include this
+        }).addTo(map)
+        updateLegend(geojson);
+        // Optional: fit to layer (commented out since we use current view bbox)
+        // map.fitBounds(networkLayer.getBounds(), { maxZoom: map.getZoom() });
+        setStatus(`Loaded ${countLineFeatures(geojson)} features`);
+      } catch (err) {
+        console.error(err);
+        setStatus(`Error: ${err.message}`);
+      }
+    }
+
+    function countLineFeatures(geojson) {
+      let count = 0;
+      if (geojson?.features) {
+        for (const f of geojson.features) {
+          if (f.geometry?.type === 'LineString' || f.geometry?.type === 'MultiLineString') count++;
+        }
+      }
+      return count;
+    }
+
+    // Debounce to avoid spamming Overpass on frequent moves
+    let moveTimer = null;
+    function scheduleRefresh() {
+      if (!document.getElementById('autoRefresh').checked) return;
+      if (moveTimer) clearTimeout(moveTimer);
+      moveTimer = setTimeout(loadCurrentBbox, 800); // 0.6s debounce
+    }
+
+    // Wire UI
+    document.getElementById('refreshBtn').addEventListener('click', loadCurrentBbox);
+    document.getElementById('autoRefresh').addEventListener('change', () => {
+      if (document.getElementById('autoRefresh').checked) scheduleRefresh();
+    });
+
+    // Handle radio selection: center and refresh bbox
+    function handleCountryChange(evt) {
+        const countryKey = evt.target.value;
+        const center = COUNTRY_CENTROIDS[countryKey];
+        const zoom   = 14;
+
+        if (!center) return;
+        map.setView(center, zoom);
+
+        // If autoRefresh is disabled, force a fetch once to update the layer
+        if (!document.getElementById('autoRefresh').checked) {
+            loadCurrentBbox();
+        }
+        }
+
+        // Wire up radios
+        document.querySelectorAll('#countrySelector input[name="country"]').forEach(el => {
+        el.addEventListener('change', handleCountryChange);
+    });
+
+    // Refresh when the map stops moving
+    map.on('moveend', scheduleRefresh);
+
+    // Initial load
+    loadCurrentBbox();
+  </script>
+</body>
+</html>
