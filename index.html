@@ -170,12 +170,12 @@
       // See Overpass QL and formats docs for details. [5](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL)[2](https://dev.overpass-api.de/overpass-doc/en/targets/formats.html)
       return `
         [out:json];
-        way["highway"~"via_ferrata|corridor|bridleway|footway|path|pedestrian|residential|steps|cycleway|living_street"](${bbox} );
+        way["highway"~"via_ferrata|corridor|bridleway|footway|path|pedestrian|residential|steps|cycleway|living_street|platform|sidewalk|crossings|unclassified|track|traffic_island"](${bbox});
         (._;>;); 
         out body geom;
       `;
     }
- 
+    
     // Fetch Overpass and convert to GeoJSON
     async function fetchGeoJSONForBbox(bbox) {
       setStatus('Querying Overpass…', true);
@@ -330,3 +330,4 @@
   </script>
 </body>
 </html>
+
