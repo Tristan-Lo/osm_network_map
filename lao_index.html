@@ -86,14 +86,14 @@
         zoomDelta: 0.25,           // each zoom step changes zoom by 0.25
         wheelPxPerZoomLevel: 400,  // slower/finer mouse-wheel zoom
         // (optional) other common options:
-        minZoom: 14,
+        minZoom: 13,
         // preferCanvas: true,     // use Canvas renderer if you expect many features
         // zoomControl: true,
         // attributionControl: true
-    }).setView([22.33, 114.17], 16);
+    }).setView([15.317335901305672, 106.5382708727861], 13);
 
 
-    map.options.minZoom = 15;
+    map.options.minZoom = 14;
     // https://tile.openstreetmap.org/{z}/{x}/{y}.png
     // https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/WGS84/{z}/{x}/{y}.png
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -298,7 +298,7 @@
     function handleCountryChange(evt) {
         const countryKey = evt.target.value;
         const center = COUNTRY_CENTROIDS[countryKey];
-        const zoom   = 14;
+        const zoom   = 13;
 
         if (!center) return;
         map.setView(center, zoom);
