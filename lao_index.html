@@ -221,7 +221,7 @@
           map.removeLayer(geotiffLayer);
         }
 
-        geotiffLayer = L.geoRasterLayer({
+        geotiffLayer = new GeoRasterLayer({
           georaster,
           opacity: 0.7,
           resolution: 128,
