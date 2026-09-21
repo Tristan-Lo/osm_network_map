@@ -74,6 +74,25 @@
       margin-right: 6px;
       vertical-align: -2px;
     }
+
+    .population-legend .ramp {
+      display: flex;
+      width: 180px;
+      height: 14px;
+      margin: 5px 0 3px;
+      border: 1px solid #aaa;
+    }
+
+    .population-legend .ramp span {
+      flex: 1;
+    }
+
+    .population-legend .labels {
+      display: flex;
+      justify-content: space-between;
+      color: #555;
+      font-size: 11px;
+    }
   </style>
 </head>
 
@@ -154,10 +173,10 @@
     map.options.minZoom = 10;
     // https://tile.openstreetmap.org/{z}/{x}/{y}.png
     // https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/WGS84/{z}/{x}/{y}.png
-    // L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    //   maxZoom: 19,
-    //   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    // }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
 
     // L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     //   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
@@ -175,13 +194,13 @@
     //   maxZoom: 20
     // }).addTo(map);
 
-    const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
+    // const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    //   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    //   subdomains: 'abcd',
+    //   maxZoom: 20
+    // }).addTo(map);
 
-    const POP_TIF_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/lao_pop_2026_CN_100m_R2025A_v1.tif";
+    const POP_TIF_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/lao_pop_2026_CN_1km_R2025A_UA_v1.tif";
     const ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_roads.geojson.gz";
 
     // Legend control
@@ -189,6 +208,23 @@
     legend.onAdd = () => {
       const div = L.DomUtil.create('div', 'legend');
       div.innerHTML = '<b>Ped Types</b><br>';
+      return div;
+    };
+
+    const populationLegend = L.control({ position: 'bottomright' });
+    populationLegend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'legend population-legend');
+      div.innerHTML = `
+        <b>Population</b>
+        <div class="ramp">
+          <span style="background:rgba(210,31,31,0.16)"></span>
+          <span style="background:rgba(210,31,31,0.35)"></span>
+          <span style="background:rgba(210,31,31,0.55)"></span>
+          <span style="background:rgba(210,31,31,0.75)"></span>
+          <span style="background:rgba(210,31,31,0.94)"></span>
+        </div>
+        <div class="labels"><span>0</span><span>750</span><span>1,500</span><span>2,250+</span></div>
+      `;
       return div;
     };
 
@@ -378,6 +414,13 @@
       { collapsed: false, position: 'topright' }
     ).addTo(map);
 
+    map.on('overlayadd', event => {
+      if (event.name === 'Population') populationLegend.addTo(map);
+    });
+    map.on('overlayremove', event => {
+      if (event.name === 'Population') map.removeControl(populationLegend);
+    });
+
     // Status helpersf
     const statusEl = document.getElementById('status');
     function setStatus(text, spinning = false) {
@@ -409,7 +452,7 @@
             if (!Number.isFinite(value) || value <= 0) return 'rgba(0,0,0,0)';
 
             // Strong, obvious population overlay: low = faint, high = vivid red
-            const alpha = Math.min(Math.max((value / 250), 0.05), 1);
+            const alpha = Math.min(Math.max((value / 3000), 0.05), 1);
             return `rgba(210, 31, 31, ${alpha})`;
           }
         }).addTo(map);
@@ -417,6 +460,7 @@
         if (!populationOverlayAdded) {
           layerControl.addOverlay(geotiffLayer, 'Population');
           populationOverlayAdded = true;
+          populationLegend.addTo(map);
         }
 
         geotiffLayer.bringToFront();
