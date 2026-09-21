@@ -11,6 +11,7 @@
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
   <script src="https://unpkg.com/osmtogeojson@3.0.0-beta.4/osmtogeojson.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
   <link
     rel="stylesheet"
@@ -110,16 +111,38 @@
         // preferCanvas: true,     // use Canvas renderer if you expect many features
         // zoomControl: true,
         // attributionControl: true
-    }).setView([14.907420461036239, 105.86661797195995], 13);
+    });
 
 
     map.options.minZoom = 13;
     // https://tile.openstreetmap.org/{z}/{x}/{y}.png
     // https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/WGS84/{z}/{x}/{y}.png
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    //   maxZoom: 19,
+    //   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // }).addTo(map);
+
+    // L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    //   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    //   subdomains: 'abcd',
+    //   maxZoom: 20
+    // }).addTo(map);
+
+    // L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png', {
+    //   attribution: '&copy; OpenStreetMap contributors',
+    //   maxZoom: 19
+    // }).addTo(map);
+
+    // L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+    //   attribution: '&copy; OpenMapTiles &copy; OpenStreetMap contributors',
+    //   maxZoom: 20
+    // }).addTo(map);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri'
     }).addTo(map);
+
+    const POP_TIF_URL = "https://github.com/Tristan-Lo/osm_network_map/blob/main/lao_pop_2026_CN_100m_R2025A_v1.tif";
 
     // Legend control
     const legend = L.control({position: 'bottomleft'});
@@ -209,9 +232,29 @@
       return geojson;
     }
 
+    const ROADS_GEOJSON_GZ_URL = "https://github.com/Tristan-Lo/osm_network_map/blob/main/laos_roads.geojson.gz";
+
+    async function loadRoadsGz() {
+      const response = await fetch(ROADS_GEOJSON_GZ_URL);
+      if (!response.ok) throw new Error(`Roads HTTP ${response.status}`);
+
+      const compressed = await response.arrayBuffer();
+      const plain = pako.ungzip(compressed, { to: "string" });
+      const geojson = JSON.parse(plain);
+
+      networkLayer.clearLayers();
+      networkLayer = L.geoJSON(geojson, {
+        style: lineStyle,
+        onEachFeature,
+        pointToLayer
+      }).addTo(map);
+
+      updateLegend(geojson);
+    }
+
     async function loadGeoTIFF() {
       try {
-        const response = await fetch('lao_pop_2026_CN_100m_R2025A_v1.tif');
+        const response = await fetch(POP_TIF_URL);
         if (!response.ok) throw new Error(`GeoTIFF HTTP ${response.status}`);
 
         const arrayBuffer = await response.arrayBuffer();
@@ -228,7 +271,7 @@
           pixelValuesToColorFn: values => {
             const value = values[0];
             if (value === 0) return 'rgba(0,0,0,0)';
-            return `rgba(0, 120, 255, ${Math.min(value / 255, 1)})`;
+            return `rgba(255, 0, 0, ${Math.min(value / 255, 1)})`;
           }
         }).addTo(map);
 
