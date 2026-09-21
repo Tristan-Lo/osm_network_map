@@ -7,9 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="https://tristan-lo.github.io/survey_app/arup_logo.ico">
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/georaster"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
   <script src="https://unpkg.com/osmtogeojson@3.0.0-beta.4/osmtogeojson.js"></script>
 
   <link
@@ -204,6 +204,27 @@
       return geojson;
     }
 
+    async function loadGeoTIFF() {
+      try {
+        const response = await fetch('lao_pop_2026_CN_100m_R2025A_v1.tif');
+        const arrayBuffer = await response.arrayBuffer();
+
+        const georaster = await parseGeoraster(arrayBuffer);
+
+        const layer = L.geoRasterLayer({
+          georaster: georaster,
+          opacity: .7,
+          resolution: 128
+        }).addTo(map);
+
+        map.fitBounds(layer.getBounds());
+
+        console.log('GeoTIFF loaded successfully');
+      } catch (err) {
+        console.error('GeoTIFF load failed:', err);
+      }
+    }
+
     // Style functions
     function lineStyle(feature) {
         const hwy = feature?.properties?.highway;
@@ -339,6 +360,7 @@
 
     // Initial load
     loadCurrentBbox();
+    loadGeoTIFF();
   </script>
 </body>
 </html>
