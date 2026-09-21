@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>Pedestrian Network (OSM + Leaflet)</title>
@@ -13,108 +13,145 @@
   <script src="https://unpkg.com/osmtogeojson@3.0.0-beta.4/osmtogeojson.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: calc(100% - 70px); }
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    #map {
+      height: calc(100% - 70px);
+    }
+
     #toolbar {
-      display: flex; gap: 12px; align-items: center;
-      padding: 8px 12px; font-family: system-ui, Arial, sans-serif;
-      background: #f7f7f7; border-bottom: 1px solid #ddd;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 12px;
+      font-family: system-ui, Arial, sans-serif;
+      background: #f7f7f7;
+      border-bottom: 1px solid #ddd;
     }
-    #status { font-size: 13px; color: #555; }
+
+    #status {
+      font-size: 13px;
+      color: #555;
+    }
+
     .spinner {
-      width: 14px; height: 14px; border: 2px solid #999; border-top-color: transparent;
-      border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;
-      margin-right: 6px; vertical-align: -2px;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #999;
+      border-top-color: transparent;
+      border-radius: 50%;
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+      vertical-align: -2px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     .legend {
-      background: white; padding: 6px 10px; border: 1px solid #ccc; font-size: 12px;
+      background: white;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      font-size: 12px;
       line-height: 1.4;
     }
-    .legend .box { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; }
+
+    .legend .box {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      vertical-align: -2px;
+    }
   </style>
 </head>
 
 <body>
-    <div id="toolbar">
+  <div id="toolbar">
     <button id="refreshBtn">Refresh bbox</button>
     <label style="margin-left:8px;">
-        <input id="autoRefresh" type="checkbox" checked>
-        Auto refresh on pan/zoom
+      <input id="autoRefresh" type="checkbox" checked>
+      Auto refresh on pan/zoom
     </label>
     <span id="status" style="margin-left:12px;"></span>
 
     <!-- Country selector -->
     <fieldset id="countrySelector" style="border:1px solid #ddd; padding:6px 10px; margin-left:auto;">
-        <legend style="font-size:12px; color:#555; padding:0 6px;">Center on District</legend>
-        <label><input type="radio" name="country" value="champasak" checked> Champasak</label>
-        <label><input type="radio" name="country" value="salavan"> Salavan</label>
-        <label><input type="radio" name="country" value="attapeu"> Attapeu</label>
-        <label><input type="radio" name="country" value="sekong"> Sekong</label>
-        <label><input type="radio" name="country" value="pakse"> Pakse</label>
+      <legend style="font-size:12px; color:#555; padding:0 6px;">Center on District</legend>
+      <label><input type="radio" name="country" value="champasak" checked> Champasak</label>
+      <label><input type="radio" name="country" value="salavan"> Salavan</label>
+      <label><input type="radio" name="country" value="attapeu"> Attapeu</label>
+      <label><input type="radio" name="country" value="sekong"> Sekong</label>
+      <label><input type="radio" name="country" value="pakse"> Pakse</label>
     </fieldset>
-    </div>
+  </div>
   <div id="map"></div>
 
-  <script>    
+  <script>
     const HWY_COLORS = {
       // Active travel and pedestrian routes
-      cycleway:       "#16803c",
-      footway:        "#1464a5",
-      path:           "#008c95",
-      pedestrian:     "#7a3e9d",
-      steps:          "#d96b00",
+      cycleway: "#16803c",
+      footway: "#1464a5",
+      path: "#008c95",
+      pedestrian: "#7a3e9d",
+      steps: "#d96b00",
 
       // Local roads
-      living_street:  "#8a4f32",
-      residential:    "#6b7280",
-      service:        "#8b8412",
-      unclassified:   "#9a9a9a",
-      track:          "#7c6f64",
-      road:           "#777777",
+      living_street: "#8a4f32",
+      residential: "#6b7280",
+      service: "#8b8412",
+      unclassified: "#9a9a9a",
+      track: "#7c6f64",
+      road: "#777777",
 
       // Main roads
-      tertiary:       "#c43d3d",
-      tertiary_link:  "#c43d3d",
-      secondary:      "#e07a00",
+      tertiary: "#c43d3d",
+      tertiary_link: "#c43d3d",
+      secondary: "#e07a00",
       secondary_link: "#e07a00",
-      primary:        "#a92323",
-      primary_link:   "#a92323",
-      trunk:          "#702020",
-      trunk_link:     "#702020",
-      motorway:       "#4c1d95",
-      motorway_link:  "#4c1d95"
+      primary: "#a92323",
+      primary_link: "#a92323",
+      trunk: "#702020",
+      trunk_link: "#702020",
+      motorway: "#4c1d95",
+      motorway_link: "#4c1d95"
     };
     const DEFAULT_COLOR = "#6e6e6e"; // fallback for anything else
     const COUNTRY_CENTROIDS = {
-        // format: [lat, lon]
-        champasak:  [14.907420461036239, 105.86661797195995],
-        salavan:    [15.715401846606873, 106.41234541037184],
-        attapeu:    [14.81882751951881, 106.82108132034524],
-        sekong:     [15.350454635784473, 106.72733069390134],
-        pakse:      [15.117948215303544, 105.8162354816221],
-        
+      // format: [lat, lon]
+      champasak: [14.907420461036239, 105.86661797195995],
+      salavan: [15.715401846606873, 106.41234541037184],
+      attapeu: [14.81882751951881, 106.82108132034524],
+      sekong: [15.350454635784473, 106.72733069390134],
+      pakse: [15.117948215303544, 105.8162354816221],
+
     };
 
     // Map options
     const map = L.map('map', {
-        zoomSnap: 0,               // allow fractional zooms (no snapping to integers/quarters)
-        zoomDelta: 0.25,           // each zoom step changes zoom by 0.25
-        wheelPxPerZoomLevel: 400,  // slower/finer mouse-wheel zoom
-        // (optional) other common options:
-        minZoom: 13,
-        // preferCanvas: true,     // use Canvas renderer if you expect many features
-        // zoomControl: true,
-        // attributionControl: true
-    });
+      zoomSnap: 0,               // allow fractional zooms (no snapping to integers/quarters)
+      zoomDelta: 0.25,           // each zoom step changes zoom by 0.25
+      wheelPxPerZoomLevel: 400,  // slower/finer mouse-wheel zoom
+      // (optional) other common options:
+      minZoom: 10,
+      // preferCanvas: true,     // use Canvas renderer if you expect many features
+      // zoomControl: true,
+      // attributionControl: true
+    }).setView([14.907420461036239, 105.86661797195995], 13);
 
 
-    map.options.minZoom = 13;
+    map.options.minZoom = 10;
     // https://tile.openstreetmap.org/{z}/{x}/{y}.png
     // https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/WGS84/{z}/{x}/{y}.png
     // L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -138,123 +175,222 @@
     //   maxZoom: 20
     // }).addTo(map);
 
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri'
+    const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      subdomains: 'abcd',
+      maxZoom: 20
     }).addTo(map);
 
-    const POP_TIF_URL = "https://github.com/Tristan-Lo/osm_network_map/blob/main/lao_pop_2026_CN_100m_R2025A_v1.tif";
+    const POP_TIF_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/lao_pop_2026_CN_100m_R2025A_v1.tif";
+    const ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_roads.geojson.gz";
 
     // Legend control
-    const legend = L.control({position: 'bottomleft'});
+    const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = () => {
       const div = L.DomUtil.create('div', 'legend');
       div.innerHTML = '<b>Ped Types</b><br>';
       return div;
     };
 
-    
+    let allRoads = null;
+
+    function featureIntersectsBounds(feature, bounds) {
+      if (!feature || !feature.geometry) return false;
+
+      const west = bounds.getWest();
+      const south = bounds.getSouth();
+      const east = bounds.getEast();
+      const north = bounds.getNorth();
+
+      const paths = [];
+
+      if (feature.geometry.type === 'LineString') {
+        paths.push(feature.geometry.coordinates);
+      } else if (feature.geometry.type === 'MultiLineString') {
+        paths.push(...feature.geometry.coordinates);
+      } else if (feature.geometry.type === 'GeometryCollection') {
+        for (const sub of feature.geometry.geometries || []) {
+          if (sub?.type === 'LineString') {
+            paths.push(sub.coordinates);
+          } else if (sub?.type === 'MultiLineString') {
+            paths.push(...sub.coordinates);
+          }
+        }
+      } else {
+        return false;
+      }
+
+      for (const path of paths) {
+        if (!Array.isArray(path)) continue;
+
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+
+        for (const coord of path) {
+          if (!Array.isArray(coord) || coord.length < 2) continue;
+
+          const [lon, lat] = coord;
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+
+          if (lon < minLon) minLon = lon;
+          if (lon > maxLon) maxLon = lon;
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+        }
+
+        if (!Number.isFinite(minLon) || !Number.isFinite(minLat)) continue;
+        if (minLon <= east && maxLon >= west && minLat <= north && maxLat >= south) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function updateVisibleRoads() {
+      // if (!allRoads) return;
+
+      const bounds = map.getBounds();
+      console.log('Map bounds:', bounds.toBBoxString());
+
+      const visibleFeatures = allRoads.features.filter(f => featureIntersectsBounds(f, bounds));
+      console.log('Visible feature count:', visibleFeatures.length);
+
+      const visible = {
+        type: 'FeatureCollection',
+        features: visibleFeatures
+      };
+
+      networkLayer.clearLayers();
+      networkLayer.addData(visible);
+
+      /*
+       * Keep one GeoJSON layer instance so the layer control continues to
+       * control the road layer after each viewport refresh.
+       */
+      networkLayer.setStyle(lineStyle);
+      networkLayer.eachLayer(layer => {
+        if (layer.feature) onEachFeature(layer.feature, layer);
+      });
+
+      /*
+       * GeoJSON layers use the configured callbacks when they are created.
+       * Re-apply the callbacks to the stable layer's new data below.
+       */
+      networkLayer.eachLayer(layer => {
+        if (layer.feature?.geometry?.type === 'Point') {
+          layer.setStyle({ radius: 0, opacity: 0, fillOpacity: 0 });
+        }
+      });
+
+      /*
+       * Keep the population raster visually above the roads when it is on.
+       */
+      if (geotiffLayer) geotiffLayer.bringToFront();
+
+      updateLegend(visible);
+      setStatus(`Visible ${countLineFeatures(visible)} road features`);
+    }
+
+    function createRoadLayer() {
+      return L.geoJSON(null, {
+        style: lineStyle,
+        onEachFeature,
+        pointToLayer
+      }).addTo(map);
+    }
+
+    async function loadRoadsOnce() {
+      if (allRoads) {
+        updateVisibleRoads();
+        return;
+      }
+
+      setStatus('Loading roads…', true);
+      try {
+        const response = await fetch(ROADS_GEOJSON_GZ_URL, { cache: 'no-store' });
+        console.log('Road fetch status:', response.status, response.ok);
+        if (!response.ok) {
+          throw new Error(`Roads HTTP ${response.status}`);
+        }
+
+        const compressed = await response.arrayBuffer();
+        console.log('Road gz bytes:', compressed.byteLength);
+
+        const plain = pako.ungzip(compressed, { to: 'string' });
+        console.log('Road decompressed preview:', String(plain).slice(0, 250));
+
+        allRoads = JSON.parse(plain);
+        console.log('Parsed roads object:', allRoads?.type, allRoads?.features?.length);
+
+        if (!allRoads || allRoads.type !== 'FeatureCollection' || !Array.isArray(allRoads.features)) {
+          throw new Error('Road data is not a valid GeoJSON FeatureCollection');
+        }
+
+        updateVisibleRoads();
+      } catch (err) {
+        console.error('Road data debug error:', err);
+        setStatus(`Road data error: ${err.message}`);
+      }
+    }
+
     // Helper to render the legend HTML
     function renderLegendHTML(stats) {
-    // stats: { cycleway: count, footway: count, ... }
-    const entries = [];
+      // stats: { cycleway: count, footway: count, ... }
+      const entries = [];
 
-    // keep a readable order, matching the road hierarchy and main pedestrian classes
-    const ORDER = [
-      'cycleway', 'footway', 'path', 'pedestrian', 'steps',
-      'living_street', 'residential', 'service', 'unclassified', 'track', 'road',
-      'tertiary', 'secondary', 'primary', 'trunk', 'motorway'
-    ];
+      // keep a readable order, matching the road hierarchy and main pedestrian classes
+      const ORDER = [
+        'motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link',
+        'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'residential', 'service',
+        'living_street', 'unclassified', 'track', 'road'
+      ];
 
-    for (const key of ORDER) {
+      for (const key of ORDER) {
         if (stats[key] > 0) {
-        const color = HWY_COLORS[key] ?? DEFAULT_COLOR;
-        const label = key.replace('_', ' '); // nicer label for 'living_street'
-        entries.push(
+          const color = HWY_COLORS[key] ?? DEFAULT_COLOR;
+          const label = key.replace('_', ' '); // nicer label for 'living_street'
+          entries.push(
             `<div><span class="box" style="background:${color}"></span>${label} <span style="color:#777">(${stats[key]})</span></div>`
-        );
+          );
         }
-    }
+      }
 
-    // If none present (e.g., empty bbox), show a note
-    if (entries.length === 0) {
+      // If none present (e.g., empty bbox), show a note
+      if (entries.length === 0) {
         entries.push('<div style="color:#777">No matching features</div>');
-    }
+      }
 
-    return `<div><b>Ped Types</b></div>${entries.join('')}`;
+      return `<div><b>Ped Types</b></div>${entries.join('')}`;
     }
 
     legend.addTo(map);
 
     // Layer reference
-    let networkLayer = L.geoJSON(null).addTo(map);
+    let networkLayer = createRoadLayer();
     let geotiffLayer = null;
+    let populationOverlayAdded = false;
+    const layerControl = L.control.layers(
+      { 'Light basemap': baseLayer },
+      { 'Road network': networkLayer },
+      { collapsed: false, position: 'topright' }
+    ).addTo(map);
 
     // Status helpersf
     const statusEl = document.getElementById('status');
-    function setStatus(text, spinning=false) {
+    function setStatus(text, spinning = false) {
       statusEl.innerHTML = spinning ? `<span class="spinner"></span>${text}` : text;
     }
 
-    // Build bbox string in Overpass order: south,west,north,east (decimal degrees)
-    function bboxString(bounds) {
-      const s = bounds.getSouth();
-      const w = bounds.getWest();
-      const n = bounds.getNorth();
-      const e = bounds.getEast();
-      return `${s},${w},${n},${e}`;
-    }
-
-    // Compose Overpass QL (vehicular roads only within bbox)
-    function buildOverpassQuery(bbox) {
-      // Using out:json and out body geom to include coordinates for ways/relations
-      // See Overpass QL and formats docs for details. [5](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL)[2](https://dev.overpass-api.de/overpass-doc/en/targets/formats.html)
-      return `
-        [out:json];
-        way["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|living_street|unclassified|track|road"](${bbox});
-        (._;>;); 
-        out body geom;
-      `;
-    }
-    
-    // Fetch Overpass and convert to GeoJSON
-    async function fetchGeoJSONForBbox(bbox) {
-      setStatus('Querying Overpass…', true);
-      const resp = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: buildOverpassQuery(bbox)
-      });
-      if (!resp.ok) {
-        throw new Error(`Overpass HTTP ${resp.status}`);
-      }
-      const overpassJSON = await resp.json();  // Overpass API returns JSON here
-      // Convert Overpass JSON → GeoJSON; same library used by Overpass Turbo. [3](https://wiki.openstreetmap.org/wiki/Overpass_turbo/GeoJSON)
-      const geojson = osmtogeojson(overpassJSON);
-      return geojson;
-    }
-
-    const ROADS_GEOJSON_GZ_URL = "https://github.com/Tristan-Lo/osm_network_map/blob/main/laos_roads.geojson.gz";
-
     async function loadRoadsGz() {
-      const response = await fetch(ROADS_GEOJSON_GZ_URL);
-      if (!response.ok) throw new Error(`Roads HTTP ${response.status}`);
-
-      const compressed = await response.arrayBuffer();
-      const plain = pako.ungzip(compressed, { to: "string" });
-      const geojson = JSON.parse(plain);
-
-      networkLayer.clearLayers();
-      networkLayer = L.geoJSON(geojson, {
-        style: lineStyle,
-        onEachFeature,
-        pointToLayer
-      }).addTo(map);
-
-      updateLegend(geojson);
+      await loadRoadsOnce();
     }
 
     async function loadGeoTIFF() {
       try {
-        const response = await fetch(POP_TIF_URL);
+        const response = await fetch(POP_TIF_URL, { cache: 'no-store' });
         if (!response.ok) throw new Error(`GeoTIFF HTTP ${response.status}`);
 
         const arrayBuffer = await response.arrayBuffer();
@@ -266,14 +402,24 @@
 
         geotiffLayer = new GeoRasterLayer({
           georaster,
-          opacity: 0.7,
+          opacity: 0.88,
           resolution: 128,
           pixelValuesToColorFn: values => {
             const value = values[0];
-            if (value === 0) return 'rgba(0,0,0,0)';
-            return `rgba(255, 0, 0, ${Math.min(value / 255, 1)})`;
+            if (!Number.isFinite(value) || value <= 0) return 'rgba(0,0,0,0)';
+
+            // Strong, obvious population overlay: low = faint, high = vivid red
+            const alpha = Math.min(Math.max((value / 250), 0.05), 1);
+            return `rgba(210, 31, 31, ${alpha})`;
           }
         }).addTo(map);
+
+        if (!populationOverlayAdded) {
+          layerControl.addOverlay(geotiffLayer, 'Population');
+          populationOverlayAdded = true;
+        }
+
+        geotiffLayer.bringToFront();
 
         map.fitBounds(geotiffLayer.getBounds());
         console.log('GeoTIFF loaded successfully');
@@ -285,24 +431,24 @@
 
     // Style functions
     function lineStyle(feature) {
-        const hwy = feature?.properties?.highway;
-        const color = HWY_COLORS[hwy] ?? DEFAULT_COLOR;
-        const isSteps = hwy === "steps";
-        return {
-            color,
-            weight: 3,
-            opacity: 0.9,
-            dashArray: isSteps ? "4,3" : null
-        };
+      const hwy = feature?.properties?.highway;
+      const color = HWY_COLORS[hwy] ?? DEFAULT_COLOR;
+      const isSteps = hwy === "steps";
+      return {
+        color,
+        weight: 3,
+        opacity: 0.9,
+        dashArray: isSteps ? "4,3" : null
+      };
     }
-    
+
     // Hide points by making radius/opacity 0
     function pointToLayer(feature, latlng) {
-    return L.circleMarker(latlng, {
+      return L.circleMarker(latlng, {
         radius: 0,          // invisible
         opacity: 0,
         fillOpacity: 0
-    });
+      });
     }
 
     function onEachFeature(feature, layer) {
@@ -313,62 +459,47 @@
     }
 
     function updateLegend(geojson) {
-    // Count features per highway type present in the current data
-    const stats = {
-        cycleway: 0,
-        footway: 0,
-        path: 0,
-        pedestrian: 0,
-        steps: 0,
-        living_street: 0,
+      // Count features per highway type present in the current data
+      const stats = {
+        motorway: 0,
+        motorway_link: 0,
+        trunk: 0,
+        trunk_link: 0,
+        primary: 0,
+        primary_link: 0,
+        secondary: 0,
+        secondary_link: 0,
+        tertiary: 0,
+        tertiary_link: 0,
         residential: 0,
         service: 0,
-        tertiary: 0
-    };
+        living_street: 0,
+        unclassified: 0,
+        track: 0,
+        road: 0,
+      };
 
-    if (geojson?.features) {
+      if (geojson?.features) {
         for (const f of geojson.features) {
-        // Only lines matter for legend; skip points/polygons
-        const gtype = f.geometry?.type;
-        if (gtype !== 'LineString' && gtype !== 'MultiLineString') continue;
+          // Only lines matter for legend; skip points/polygons
+          // const gtype = f.geometry?.type;
+          // if (gtype !== 'LineString' && gtype !== 'MultiLineString') continue;
 
-        const key = f.properties?.highway;
-        if (key && key in stats) {
+          const key = f.properties?.highway;
+          if (key && key in stats) {
             stats[key] += 1;
+          }
         }
-        }
-    }
+      }
 
-    // Update the legend DOM
-    const container = legend.getContainer();
-    if (container) {
+      // Update the legend DOM
+      const container = legend.getContainer();
+      if (container) {
         container.innerHTML = renderLegendHTML(stats);
-    }
-    }
-
-    // Load and render for current map view
-    async function loadCurrentBbox() {
-      try {
-        const bbox = bboxString(map.getBounds());
-        const geojson = await fetchGeoJSONForBbox(bbox);
-        // Clear previous layer and add new one
-        networkLayer.clearLayers();        
-        networkLayer = L.geoJSON(geojson, {
-        style: lineStyle,
-        onEachFeature,
-        pointToLayer  // <- include this
-        }).addTo(map)
-        updateLegend(geojson);
-        // Optional: fit to layer (commented out since we use current view bbox)
-        // map.fitBounds(networkLayer.getBounds(), { maxZoom: map.getZoom() });
-        // setStatus(`Loaded ${countLineFeatures(geojson)} features`);
-        setStatus(`PeLoaded ${countLineFeatures(geojson)} features`);
-      } catch (err) {
-        console.error(err);
-        setStatus(`Error: ${err.message}`);
       }
     }
 
+    // Render the roads from the static GitHub asset
     function countLineFeatures(geojson) {
       let count = 0;
       if (geojson?.features) {
@@ -379,47 +510,51 @@
       return count;
     }
 
-    // Debounce to avoid spamming Overpass on frequent moves
     let moveTimer = null;
     function scheduleRefresh() {
       if (!document.getElementById('autoRefresh').checked) return;
       if (moveTimer) clearTimeout(moveTimer);
-      moveTimer = setTimeout(loadCurrentBbox, 800); // 0.6s debounce
+      moveTimer = setTimeout(() => {
+        updateVisibleRoads();
+      }, 400);
     }
 
-    // Wire UI
-    document.getElementById('refreshBtn').addEventListener('click', loadCurrentBbox);
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      allRoads = null;
+      loadRoadsOnce();
+    });
+
     document.getElementById('autoRefresh').addEventListener('change', () => {
       if (document.getElementById('autoRefresh').checked) scheduleRefresh();
     });
 
-    // Handle radio selection: center and refresh bbox
     function handleCountryChange(evt) {
-        const countryKey = evt.target.value;
-        const center = COUNTRY_CENTROIDS[countryKey];
-        const zoom   = 13;
+      const countryKey = evt.target.value;
+      const center = COUNTRY_CENTROIDS[countryKey];
+      const zoom = 11;
 
-        if (!center) return;
-        map.setView(center, zoom);
+      if (!center) return;
+      map.setView(center, zoom);
 
-        // If autoRefresh is disabled, force a fetch once to update the layer
-        if (!document.getElementById('autoRefresh').checked) {
-            loadCurrentBbox();
-        }
-        }
+      if (!document.getElementById('autoRefresh').checked) {
+        updateVisibleRoads();
+      }
+    }
 
-        // Wire up radios
-        document.querySelectorAll('#countrySelector input[name="country"]').forEach(el => {
-        el.addEventListener('change', handleCountryChange);
+    document.querySelectorAll('#countrySelector input[name="country"]').forEach(el => {
+      el.addEventListener('change', handleCountryChange);
     });
 
-    // Refresh when the map stops moving
     map.on('moveend', scheduleRefresh);
+    map.on('zoomend', scheduleRefresh);
+
+    // Initialize with a valid viewport before loading data
+    // map.setView(COUNTRY_CENTROIDS.champasak, 13);
 
     // Initial load
-    loadCurrentBbox();
     loadGeoTIFF();
+    loadRoadsOnce();
   </script>
 </body>
-</html>
 
+</html>
