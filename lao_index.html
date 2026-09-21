@@ -51,7 +51,7 @@
     <!-- Country selector -->
     <fieldset id="countrySelector" style="border:1px solid #ddd; padding:6px 10px; margin-left:auto;">
         <legend style="font-size:12px; color:#555; padding:0 6px;">Center on District</legend>
-        <label><input type="radio" name="country" value="champasak"> Champasak</label>
+        <label><input type="radio" name="country" value="champasak" checked> Champasak</label>
         <label><input type="radio" name="country" value="salavan"> Salavan</label>
         <label><input type="radio" name="country" value="attapeu"> Attapeu</label>
         <label><input type="radio" name="country" value="sekong"> Sekong</label>
@@ -110,7 +110,7 @@
         // preferCanvas: true,     // use Canvas renderer if you expect many features
         // zoomControl: true,
         // attributionControl: true
-    }).setView([15.317335901305672, 106.5382708727861], 13);
+    }).setView([14.907420461036239, 105.86661797195995], 13);
 
 
     map.options.minZoom = 13;
@@ -135,8 +135,12 @@
     // stats: { cycleway: count, footway: count, ... }
     const entries = [];
 
-    // keep a readable order
-    const ORDER = ['cycleway', 'footway', 'path', 'pedestrian', 'steps', 'living_street', 'residential', 'service', 'tertiary'];
+    // keep a readable order, matching the road hierarchy and main pedestrian classes
+    const ORDER = [
+      'cycleway', 'footway', 'path', 'pedestrian', 'steps',
+      'living_street', 'residential', 'service', 'unclassified', 'track', 'road',
+      'tertiary', 'secondary', 'primary', 'trunk', 'motorway'
+    ];
 
     for (const key of ORDER) {
         if (stats[key] > 0) {
@@ -160,6 +164,7 @@
 
     // Layer reference
     let networkLayer = L.geoJSON(null).addTo(map);
+    let geotiffLayer = null;
 
     // Status helpersf
     const statusEl = document.getElementById('status');
@@ -207,21 +212,31 @@
     async function loadGeoTIFF() {
       try {
         const response = await fetch('lao_pop_2026_CN_100m_R2025A_v1.tif');
-        const arrayBuffer = await response.arrayBuffer();
+        if (!response.ok) throw new Error(`GeoTIFF HTTP ${response.status}`);
 
+        const arrayBuffer = await response.arrayBuffer();
         const georaster = await parseGeoraster(arrayBuffer);
 
-        const layer = L.geoRasterLayer({
-          georaster: georaster,
-          opacity: .7,
-          resolution: 128
+        if (geotiffLayer) {
+          map.removeLayer(geotiffLayer);
+        }
+
+        geotiffLayer = L.geoRasterLayer({
+          georaster,
+          opacity: 0.7,
+          resolution: 128,
+          pixelValuesToColorFn: values => {
+            const value = values[0];
+            if (value === 0) return 'rgba(0,0,0,0)';
+            return `rgba(0, 120, 255, ${Math.min(value / 255, 1)})`;
+          }
         }).addTo(map);
 
-        map.fitBounds(layer.getBounds());
-
+        map.fitBounds(geotiffLayer.getBounds());
         console.log('GeoTIFF loaded successfully');
       } catch (err) {
         console.error('GeoTIFF load failed:', err);
+        setStatus(`GeoTIFF error: ${err.message}`);
       }
     }
 
