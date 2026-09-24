@@ -202,6 +202,7 @@
 
     const POP_TIF_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/lao_pop_2026_CN_1km_R2025A_UA_v1.tif";
     const ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_roads.geojson.gz";
+    const STR_ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_str_roads.geojson.gz";
 
     // Legend control
     const legend = L.control({ position: 'bottomleft' });
@@ -217,11 +218,11 @@
       div.innerHTML = `
         <b>Population</b>
         <div class="ramp">
-          <span style="background:rgba(210,31,31,0.16)"></span>
-          <span style="background:rgba(210,31,31,0.35)"></span>
-          <span style="background:rgba(210,31,31,0.55)"></span>
-          <span style="background:rgba(210,31,31,0.75)"></span>
-          <span style="background:rgba(210,31,31,0.94)"></span>
+          <span style="background:#fff3b0"></span>
+          <span style="background:#fed976"></span>
+          <span style="background:#fd8d3c"></span>
+          <span style="background:#f03b20"></span>
+          <span style="background:#bd0026"></span>
         </div>
         <div class="labels"><span>0</span><span>750</span><span>1,500</span><span>2,250+</span></div>
       `;
@@ -229,6 +230,7 @@
     };
 
     let allRoads = null;
+    let allStrategicRoads = null;
 
     function featureIntersectsBounds(feature, bounds) {
       if (!feature || !feature.geometry) return false;
@@ -302,6 +304,14 @@
       networkLayer.clearLayers();
       networkLayer.addData(visible);
 
+      strategicLayer.clearLayers();
+      strategicLayer.addData({
+        type: 'FeatureCollection',
+        features: allStrategicRoads
+          ? allStrategicRoads.features.filter(f => featureIntersectsBounds(f, bounds))
+          : []
+      });
+
       /*
        * Keep one GeoJSON layer instance so the layer control continues to
        * control the road layer after each viewport refresh.
@@ -320,6 +330,12 @@
           layer.setStyle({ radius: 0, opacity: 0, fillOpacity: 0 });
         }
       });
+      
+      strategicLayer.setStyle(lineStyle);
+      strategicLayer.eachLayer(layer => {
+        if (layer.feature) onEachFeature(layer.feature, layer);
+      });
+      strategicLayer.bringToFront();
 
       /*
        * Keep the population raster visually above the roads when it is on.
@@ -331,6 +347,14 @@
     }
 
     function createRoadLayer() {
+      return L.geoJSON(null, {
+        style: lineStyle,
+        onEachFeature,
+        pointToLayer
+      });
+    }
+
+    function createStrategicLayer() {
       return L.geoJSON(null, {
         style: lineStyle,
         onEachFeature,
@@ -372,6 +396,35 @@
       }
     }
 
+    async function loadStrategicRoadsOnce() {
+      if (allStrategicRoads) {
+        updateVisibleRoads();
+        return;
+      }
+
+      try {
+        const response = await fetch(STR_ROADS_GEOJSON_GZ_URL, { cache: 'no-store' });
+        console.log('Strategic road fetch status:', response.status, response.ok);
+        if (!response.ok) {
+          throw new Error(`Strategic roads HTTP ${response.status}`);
+        }
+
+        const compressed = await response.arrayBuffer();
+        const plain = pako.ungzip(compressed, { to: 'string' });
+        allStrategicRoads = JSON.parse(plain);
+
+        if (!allStrategicRoads || allStrategicRoads.type !== 'FeatureCollection' ||
+          !Array.isArray(allStrategicRoads.features)) {
+          throw new Error('Strategic road data is not a valid GeoJSON FeatureCollection');
+        }
+
+        updateVisibleRoads();
+      } catch (err) {
+        console.error('Strategic road data error:', err);
+        setStatus(`Strategic road data error: ${err.message}`);
+      }
+    }
+
     // Helper to render the legend HTML
     function renderLegendHTML(stats) {
       // stats: { cycleway: count, footway: count, ... }
@@ -406,11 +459,12 @@
 
     // Layer reference
     let networkLayer = createRoadLayer();
+    let strategicLayer = createStrategicLayer();
     let geotiffLayer = null;
     let populationOverlayAdded = false;
     const layerControl = L.control.layers(
       { 'Light basemap': baseLayer },
-      { 'Road network': networkLayer },
+      { 'Road network': networkLayer, 'Strategic roads': strategicLayer },
       { collapsed: false, position: 'topright' }
     ).addTo(map);
 
@@ -451,9 +505,21 @@
             const value = values[0];
             if (!Number.isFinite(value) || value <= 0) return 'rgba(0,0,0,0)';
 
-            // Strong, obvious population overlay: low = faint, high = vivid red
-            const alpha = Math.min(Math.max((value / 3000), 0.05), 1);
-            return `rgba(210, 31, 31, ${alpha})`;
+            const stops = [
+              [255, 243, 176],
+              [254, 217, 118],
+              [253, 141, 60],
+              [240, 59, 32],
+              [189, 0, 38]
+            ];
+            const position = Math.min(value / 3000, 1) * (stops.length - 1);
+            const lower = Math.floor(position);
+            const upper = Math.min(lower + 1, stops.length - 1);
+            const fraction = position - lower;
+            const color = stops[lower].map((channel, index) =>
+              Math.round(channel + (stops[upper][index] - channel) * fraction)
+            );
+            return `rgba(${color.join(',')}, 0.9)`;
           }
         }).addTo(map);
 
@@ -486,6 +552,14 @@
       };
     }
 
+    function strategicLineStyle() {
+      return {
+        color: '#005f73',
+        weight: 5,
+        opacity: 0.95
+      };
+    }
+
     // Hide points by making radius/opacity 0
     function pointToLayer(feature, latlng) {
       return L.circleMarker(latlng, {
@@ -498,8 +572,9 @@
     function onEachFeature(feature, layer) {
       const p = feature.properties || {};
       const name = p.name || '(no name)';
+      const nameEn = p.name_en || '(no English name)';
       const type = p.highway || '';
-      layer.bindTooltip(`<b>${name}</b><br>type: ${type}`);
+      layer.bindTooltip(`<b>${name}</b><br>English: ${nameEn}<br>type: ${type}`);
     }
 
     function updateLegend(geojson) {
@@ -565,7 +640,9 @@
 
     document.getElementById('refreshBtn').addEventListener('click', () => {
       allRoads = null;
+      allStrategicRoads = null;
       loadRoadsOnce();
+      loadStrategicRoadsOnce();
     });
 
     document.getElementById('autoRefresh').addEventListener('change', () => {
@@ -598,6 +675,7 @@
     // Initial load
     loadGeoTIFF();
     loadRoadsOnce();
+    loadStrategicRoadsOnce();
   </script>
 </body>
 
