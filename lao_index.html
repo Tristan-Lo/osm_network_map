@@ -147,6 +147,27 @@
       motorway_link: "#4c1d95"
     };
     const DEFAULT_COLOR = "#6e6e6e"; // fallback for anything else
+    const BLG_COLORS = {
+      residential: '#e7a56b',
+      commercial: '#d85b52',
+      retail: '#e88449',
+      industrial: '#8b7b72',
+      farmland: '#c7b84b',
+      farmyard: '#aa9950',
+      forest: '#3d8053',
+      grass: '#7eaa68',
+      meadow: '#91ad63',
+      park: '#39a58b',
+      recreation_ground: '#4e9d87',
+      cemetery: '#78966c',
+      quarry: '#a18a79',
+      water: '#4f9fc1',
+      orchard: '#6ca965',
+      scrub: '#a3b18a',
+      military: '#8b8b8b',
+      heath: '#a3b18a',
+      landfill: '#8b8b8b'
+    };
     const LANDUSE_COLORS = {
       residential: '#e7a56b',
       commercial: '#d85b52',
@@ -171,6 +192,7 @@
       cemetery: '#78966c',
       landfill: '#8b8b8b'
     };
+
     const COUNTRY_CENTROIDS = {
       // format: [lat, lon]
       champasak: [14.907420461036239, 105.86661797195995],
@@ -228,6 +250,8 @@
     const ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_roads.geojson.gz";
     const STR_ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_str_roads.geojson.gz";
     const LANDUSE_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_landuse.geojson.gz";
+    const BUILDINGS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_building.geojson.gz";
+    
     // Legend control
     const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = () => {
@@ -256,7 +280,9 @@
     let allRoads = null;
     let allStrategicRoads = null;
     let allLanduse = null;
+    let allBuildings = null;
     let landuseFeaturesWithBounds = [];
+    let buildingFeaturesWithBounds = [];
 
     function featureIntersectsBounds(feature, bounds) {
       if (!feature || !feature.geometry) return false;
@@ -338,6 +364,7 @@
           : []
       });
       updateVisibleLanduse(bounds);
+      updateVisibleBuildings(bounds);
 
       /*
        * Keep one GeoJSON layer instance so the layer control continues to
@@ -389,6 +416,18 @@
       }).addTo(map);
     }
 
+    function createBlgLayer() {
+      map.createPane('landusePane');
+      map.getPane('landusePane').style.zIndex = 300;
+      return L.geoJSON(null, {
+        pane: 'landusePane',
+        style: landuseStyle,
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties?.type || feature.properties?.name || 'N/A');
+        }
+      }).addTo(map);
+    }
+
     function createLanduseLayer() {
       map.createPane('landusePane');
       map.getPane('landusePane').style.zIndex = 350;
@@ -437,6 +476,17 @@
       landuseLayer.addData({ type: 'FeatureCollection', features: visibleFeatures });
     }
 
+    function updateVisibleBuildings(bounds = map.getBounds()) {
+      if (!allBuildings) return;
+      const visibleFeatures = buildingFeaturesWithBounds
+        .filter(({ bounds: featureBounds }) => featureBounds &&
+          featureBounds.west <= bounds.getEast() && featureBounds.east >= bounds.getWest() &&
+          featureBounds.south <= bounds.getNorth() && featureBounds.north >= bounds.getSouth())
+        .map(({ feature }) => feature);
+      blgLayer.clearLayers();
+      blgLayer.addData({ type: 'FeatureCollection', features: visibleFeatures });
+    }
+
     async function loadLanduseOnce() {
       if (allLanduse) {
         updateVisibleLanduse();
@@ -461,6 +511,33 @@
       } catch (err) {
         console.error('Land-use data error:', err);
         setStatus(`Land-use data error: ${err.message}`);
+      }
+    }
+
+    async function loadBlgOnce() {
+      if (allBuildings) {
+        updateVisibleBuildings();
+        return;
+      }
+
+      try {
+        const response = await fetch(BUILDINGS_GEOJSON_GZ_URL, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Buildings HTTP ${response.status}`);
+
+        const compressed = await response.arrayBuffer();
+        allBuildings = JSON.parse(pako.ungzip(compressed, { to: 'string' }));
+        if (allBuildings?.type !== 'FeatureCollection' || !Array.isArray(allBuildings.features)) {
+          throw new Error('Building data is not a valid GeoJSON FeatureCollection');
+        }
+
+        buildingFeaturesWithBounds = allBuildings.features.map(feature => ({
+          feature,
+          bounds: getFeatureBounds(feature)
+        }));
+        updateVisibleBuildings();
+      } catch (err) {
+        console.error('Building data error:', err);
+        setStatus(`Building data error: ${err.message}`);
       }
     }
 
@@ -563,11 +640,12 @@
     let networkLayer = createRoadLayer();
     let strategicLayer = createStrategicLayer();
     let landuseLayer = createLanduseLayer();
+    let blgLayer = createBlgLayer();
     let geotiffLayer = null;
     let populationOverlayAdded = false;
     const layerControl = L.control.layers(
       { 'Light basemap': baseLayer },
-      { 'Road network': networkLayer, 'Strategic roads': strategicLayer, 'Land use': landuseLayer },
+      { 'Road network': networkLayer, 'Strategic roads': strategicLayer, 'Land use': landuseLayer, 'Buildings': blgLayer },
       { collapsed: false, position: 'topright' }
     ).addTo(map);
 
@@ -665,6 +743,17 @@
 
     function landuseStyle(feature) {
       const color = LANDUSE_COLORS[feature?.properties?.fclass] ?? '#8b9a83';
+      return {
+        color,
+        weight: 0.7,
+        opacity: 0.75,
+        fillColor: color,
+        fillOpacity: 0.38
+      };
+    }
+
+    function blgStyle(feature) {
+      const color = BLG_COLORS[feature?.properties?.type] ?? '#8b9a83';
       return {
         color,
         weight: 0.7,
@@ -791,6 +880,7 @@
     loadRoadsOnce();
     loadStrategicRoadsOnce();
     loadLanduseOnce();
+    loadBlgOnce();
   </script>
 </body>
 
