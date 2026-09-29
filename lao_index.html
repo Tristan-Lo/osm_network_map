@@ -147,6 +147,30 @@
       motorway_link: "#4c1d95"
     };
     const DEFAULT_COLOR = "#6e6e6e"; // fallback for anything else
+    const LANDUSE_COLORS = {
+      residential: '#e7a56b',
+      commercial: '#d85b52',
+      retail: '#e88449',
+      industrial: '#8b7b72',
+      farmland: '#c7b84b',
+      farmyard: '#aa9950',
+      forest: '#3d8053',
+      grass: '#7eaa68',
+      meadow: '#91ad63',
+      park: '#39a58b',
+      recreation_ground: '#4e9d87',
+      cemetery: '#78966c',
+      quarry: '#a18a79',
+      water: '#4f9fc1',
+      orchard: '#6ca965',
+      scrub: '#a3b18a',
+      farmyard: '#aa9950',
+      quarry: '#a18a79',
+      military: '#8b8b8b',
+      heath: '#a3b18a',
+      cemetery: '#78966c',
+      landfill: '#8b8b8b'
+    };
     const COUNTRY_CENTROIDS = {
       // format: [lat, lon]
       champasak: [14.907420461036239, 105.86661797195995],
@@ -203,7 +227,7 @@
     const POP_TIF_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/lao_pop_2026_CN_1km_R2025A_UA_v1.tif";
     const ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_roads.geojson.gz";
     const STR_ROADS_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_str_roads.geojson.gz";
-
+    const LANDUSE_GEOJSON_GZ_URL = "https://raw.githubusercontent.com/Tristan-Lo/osm_network_map/main/laos_landuse.geojson.gz";
     // Legend control
     const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = () => {
@@ -231,6 +255,8 @@
 
     let allRoads = null;
     let allStrategicRoads = null;
+    let allLanduse = null;
+    let landuseFeaturesWithBounds = [];
 
     function featureIntersectsBounds(feature, bounds) {
       if (!feature || !feature.geometry) return false;
@@ -311,6 +337,7 @@
           ? allStrategicRoads.features.filter(f => featureIntersectsBounds(f, bounds))
           : []
       });
+      updateVisibleLanduse(bounds);
 
       /*
        * Keep one GeoJSON layer instance so the layer control continues to
@@ -360,6 +387,81 @@
         onEachFeature,
         pointToLayer
       }).addTo(map);
+    }
+
+    function createLanduseLayer() {
+      map.createPane('landusePane');
+      map.getPane('landusePane').style.zIndex = 350;
+      return L.geoJSON(null, {
+        pane: 'landusePane',
+        style: landuseStyle,
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties?.fclass || 'Land use');
+        }
+      }).addTo(map);
+    }
+
+    function getFeatureBounds(feature) {
+      const bounds = { west: Infinity, south: Infinity, east: -Infinity, north: -Infinity };
+      const visitCoordinates = coordinates => {
+        if (!Array.isArray(coordinates)) return;
+        if (typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+          bounds.west = Math.min(bounds.west, coordinates[0]);
+          bounds.east = Math.max(bounds.east, coordinates[0]);
+          bounds.south = Math.min(bounds.south, coordinates[1]);
+          bounds.north = Math.max(bounds.north, coordinates[1]);
+          return;
+        }
+        coordinates.forEach(visitCoordinates);
+      };
+      const visitGeometry = geometry => {
+        if (geometry?.type === 'GeometryCollection') {
+          (geometry.geometries || []).forEach(visitGeometry);
+        } else {
+          visitCoordinates(geometry?.coordinates);
+        }
+      };
+
+      visitGeometry(feature?.geometry);
+      return Number.isFinite(bounds.west) ? bounds : null;
+    }
+
+    function updateVisibleLanduse(bounds = map.getBounds()) {
+      if (!allLanduse) return;
+      const visibleFeatures = landuseFeaturesWithBounds
+        .filter(({ bounds: featureBounds }) => featureBounds &&
+          featureBounds.west <= bounds.getEast() && featureBounds.east >= bounds.getWest() &&
+          featureBounds.south <= bounds.getNorth() && featureBounds.north >= bounds.getSouth())
+        .map(({ feature }) => feature);
+      landuseLayer.clearLayers();
+      landuseLayer.addData({ type: 'FeatureCollection', features: visibleFeatures });
+    }
+
+    async function loadLanduseOnce() {
+      if (allLanduse) {
+        updateVisibleLanduse();
+        return;
+      }
+
+      try {
+        const response = await fetch(LANDUSE_GEOJSON_GZ_URL, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Land-use HTTP ${response.status}`);
+
+        const compressed = await response.arrayBuffer();
+        allLanduse = JSON.parse(pako.ungzip(compressed, { to: 'string' }));
+        if (allLanduse?.type !== 'FeatureCollection' || !Array.isArray(allLanduse.features)) {
+          throw new Error('Land-use data is not a valid GeoJSON FeatureCollection');
+        }
+
+        landuseFeaturesWithBounds = allLanduse.features.map(feature => ({
+          feature,
+          bounds: getFeatureBounds(feature)
+        }));
+        updateVisibleLanduse();
+      } catch (err) {
+        console.error('Land-use data error:', err);
+        setStatus(`Land-use data error: ${err.message}`);
+      }
     }
 
     async function loadRoadsOnce() {
@@ -460,11 +562,12 @@
     // Layer reference
     let networkLayer = createRoadLayer();
     let strategicLayer = createStrategicLayer();
+    let landuseLayer = createLanduseLayer();
     let geotiffLayer = null;
     let populationOverlayAdded = false;
     const layerControl = L.control.layers(
       { 'Light basemap': baseLayer },
-      { 'Road network': networkLayer, 'Strategic roads': strategicLayer },
+      { 'Road network': networkLayer, 'Strategic roads': strategicLayer, 'Land use': landuseLayer },
       { collapsed: false, position: 'topright' }
     ).addTo(map);
 
@@ -557,6 +660,17 @@
         color: '#005f73',
         weight: 5,
         opacity: 0.95
+      };
+    }
+
+    function landuseStyle(feature) {
+      const color = LANDUSE_COLORS[feature?.properties?.fclass] ?? '#8b9a83';
+      return {
+        color,
+        weight: 0.7,
+        opacity: 0.75,
+        fillColor: color,
+        fillOpacity: 0.38
       };
     }
 
@@ -676,6 +790,7 @@
     loadGeoTIFF();
     loadRoadsOnce();
     loadStrategicRoadsOnce();
+    loadLanduseOnce();
   </script>
 </body>
 
